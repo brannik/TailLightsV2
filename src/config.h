@@ -23,6 +23,8 @@
 #define SPEED_CONTROL 40 // in milliseconds
 
 // hue/saturation setup
+#define BOOT_HUE    150
+#define BOOT_SAT    150
 #define TURN_HUE    32
 #define TURN_SAT    255
 

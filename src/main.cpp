@@ -31,13 +31,13 @@ void timeLoop (unsigned long int startMillis, unsigned long int interval) { // d
 void StartUpAnimation(){
   for(int i=0;i<=SS_LED_NUMBER;i++){
     for(int y=0;y<SS_LED_NUMBER-i;y++){
-      TurnSignalStrip[y] = CHSV( 150, 150, brightens2[0]);
+      TurnSignalStrip[y] = CHSV( BOOT_HUE, BOOT_SAT, brightens2[0]);
       TurnSignalStrip[y-1] = CHSV( 0, 0, 0);
 
-      StopSignalStrip[y] = CHSV( 150, 150, brightens2[0]);
+      StopSignalStrip[y] = CHSV( BOOT_HUE, BOOT_SAT, brightens2[0]);
       StopSignalStrip[y-1] = CHSV( 0, 0, 0);
 
-      RunningStrip[y] = CHSV( 150, 150, brightens2[0]);
+      RunningStrip[y] = CHSV( BOOT_HUE, BOOT_SAT, brightens2[0]);
       RunningStrip[y-1] = CHSV( 0, 0, 0);
 
       FastLED[TURN_INDEX].showLeds();
@@ -91,24 +91,42 @@ void TurnSignalAnimationOFF(){
   fill_solid(TurnSignalStrip,TS_LED_NUMBER,CRGB::Black);
   FastLED[TURN_INDEX].showLeds();
 }
-void StopSignalAnimationON(){
-  if(fStop){
-      triggerOnce = true;
-      for(int i=0;i<15;i++){
-        if(i%2 !=0){
-          fill_solid(StopSignalStrip,SS_LED_NUMBER,CHSV(STOP_HUE,STOP_SAT,brightens2[0]));
-          FastLED[STOP_INDEX].showLeds();
-        }else{
-          fill_solid(StopSignalStrip,SS_LED_NUMBER,CRGB::Black);
-          FastLED[STOP_INDEX].showLeds();
-        }
-        if(i==14) fStop = false;
-        timeLoop(millis(),45);
+
+const int animationDuration = 45; // Adjust this value as needed
+unsigned long lastAnimationTime = 0;
+bool isAnimationActive = false;
+int animationStep = 0;
+
+void StopSignalAnimationON() {
+  unsigned long currentTime = millis();
+
+  if (fStop) {
+    triggerOnce = true;
+
+    // Check if it's time to update the animation
+    if (currentTime - lastAnimationTime >= animationDuration) {
+      lastAnimationTime = currentTime;
+
+      if (animationStep % 2 != 0) {
+        fill_solid(StopSignalStrip, SS_LED_NUMBER, CHSV(STOP_HUE, STOP_SAT, brightens2[0]));
+      } else {
+        fill_solid(StopSignalStrip, SS_LED_NUMBER, CRGB::Black);
       }
-    }else{
-      fill_solid(StopSignalStrip,SS_LED_NUMBER,CHSV(STOP_HUE,STOP_SAT,brightens2[0]));
+
       FastLED[STOP_INDEX].showLeds();
+
+      if (animationStep == 14) {
+        fStop = false; // Animation completed, reset the flag
+        isAnimationActive = false;
+      } else {
+        animationStep++;
+      }
     }
+  } else {
+    // If fStop is false, just set the color without animation
+    fill_solid(StopSignalStrip, SS_LED_NUMBER, CHSV(STOP_HUE, STOP_SAT, brightens2[0]));
+    FastLED[STOP_INDEX].showLeds();
+  }
 }
 void StopSignalAnimationOFF(){
   fill_solid(StopSignalStrip,SS_LED_NUMBER,CRGB::Black);
@@ -139,6 +157,50 @@ void RunSignalAnimationOFF(){
     fill_solid(RunningStrip,RS_LED_NUMBER,CRGB::Black);
     FastLED[RUN_INDEX].showLeds(); 
 }
+
+void readSignalStates() {
+  TurnSignalState = digitalRead(TURNS_INPUT_PIN);
+  StopSignalState = digitalRead(STOPS_INPUT_PIN);
+  RunSignalState = digitalRead(RUNS_INPUT_PIN);
+}
+void controlTurnSignalAnimation() {
+  if (TurnSignalState == HIGH) {
+    TurnSignalAnimationON();
+  } else if (TurnSignalState == LOW) {
+    TurnSignalAnimationOFF();
+  }
+}
+void controlStopSignalAnimation() {
+  if (StopSignalState == HIGH) {
+    StopSignalAnimationON();
+    // Check the timer condition here for animation control.
+    if (XTimePassed() && triggerOnce) {
+      // Make animation active again.
+      triggerOnce = false;
+    } else {
+      // Static light.
+    }
+  } else if (StopSignalState == LOW) {
+    StopSignalAnimationOFF();
+  }
+}
+void controlRunSignalAnimation() {
+  if (RunSignalState == HIGH) {
+    RunSignalAnimationON();
+  } else if (RunSignalState == LOW) {
+    RunSignalAnimationOFF();
+  }
+}
+
+bool XTimePassed() {
+  // Implement the logic to check if X time has passed here.
+  // Return true if it has passed, otherwise false.
+  if (STOPTimer.ding()) {
+    fStop = true;
+    triggerOnce = true;
+  }
+  return true;
+}
 // FUNCTIONS
 
 void setup() {
@@ -162,34 +224,8 @@ void setup() {
 }
 
 void loop() {
-  TurnSignalState = digitalRead(TURNS_INPUT_PIN);
-  StopSignalState = digitalRead(STOPS_INPUT_PIN);
-  RunSignalState = digitalRead(RUNS_INPUT_PIN);
-
-  if(TurnSignalState == HIGH){
-    TurnSignalAnimationON();
-  }
-  else if(TurnSignalState == LOW){
-    TurnSignalAnimationOFF();
-  }
-  
-  if(StopSignalState == HIGH){
-    StopSignalAnimationON();
-    // if X time passed after pedal is DEpressed or hold - make animation active again, else static light
-  }
-  else if(StopSignalState == LOW){
-    StopSignalAnimationOFF();
-  }
-  
-  if(RunSignalState == HIGH){
-    RunSignalAnimationON();    
-  }
-  else if(RunSignalState == LOW){
-    RunSignalAnimationOFF();  
-  }
-  
-  if(STOPTimer.ding()){
-    fStop = true;
-    triggerOnce = true;
-  }
+  readSignalStates();
+  controlTurnSignalAnimation();
+  controlStopSignalAnimation();
+  controlRunSignalAnimation();
 }
