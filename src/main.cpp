@@ -3,7 +3,7 @@
 #include "config.h"
 #include "timeObj.h"
 
-
+#pragma region INITIALIZATION
 int TurnSignalState = LOW;
 int StopSignalState = LOW;
 int RunSignalState = LOW;
@@ -17,20 +17,28 @@ CRGB RunningStrip[RS_LED_NUMBER];
 int delayTurnLedAnim = 15; 
 bool onStartupRunning = true;
 bool fStop = true;
+bool StopAnimationCanBeActive = true;
 
 unsigned long currentMillis = 0;
 unsigned long previousMillis = 0;
 
 timeObj STOPTimer(10.0*1000.0,false);
-bool triggerOnce = true;
+
 
 void timeLoop (unsigned long int startMillis, unsigned long int interval) { // delay substitute function
   while (millis() - startMillis < interval) {}
 }
-// FUNCTIONS
+#pragma endregion INITIALIZATION
+
+#pragma region ANIMATIONS
+
 void StartUpAnimation(){
-  for(int i=0;i<=SS_LED_NUMBER;i++){
-    for(int y=0;y<SS_LED_NUMBER-i;y++){
+  int max_leds = 0;
+  if(TS_LED_NUMBER >= SS_LED_NUMBER) max_leds = TS_LED_NUMBER;
+  if(RS_LED_NUMBER >= max_leds) max_leds = RS_LED_NUMBER;
+
+  for(int i=0;i<=max_leds;i++){
+    for(int y=0;y<max_leds-i;y++){
       TurnSignalStrip[y] = CHSV( BOOT_HUE, BOOT_SAT, brightens2[0]);
       TurnSignalStrip[y-1] = CHSV( 0, 0, 0);
 
@@ -91,50 +99,28 @@ void TurnSignalAnimationOFF(){
   fill_solid(TurnSignalStrip,TS_LED_NUMBER,CRGB::Black);
   FastLED[TURN_INDEX].showLeds();
 }
-
-const int animationDuration = 45; // Adjust this value as needed
-unsigned long lastAnimationTime = 0;
-bool isAnimationActive = false;
-int animationStep = 0;
-
 void StopSignalAnimationON() {
-  unsigned long currentTime = millis();
-
-  if (fStop) {
-    triggerOnce = true;
-
-    // Check if it's time to update the animation
-    if (currentTime - lastAnimationTime >= animationDuration) {
-      lastAnimationTime = currentTime;
-
-      if (animationStep % 2 != 0) {
-        fill_solid(StopSignalStrip, SS_LED_NUMBER, CHSV(STOP_HUE, STOP_SAT, brightens2[0]));
-      } else {
-        fill_solid(StopSignalStrip, SS_LED_NUMBER, CRGB::Black);
-      }
-
-      FastLED[STOP_INDEX].showLeds();
-
-      if (animationStep == 14) {
-        fStop = false; // Animation completed, reset the flag
-        isAnimationActive = false;
-      } else {
-        animationStep++;
-      }
-    }
-  } else {
-    // If fStop is false, just set the color without animation
+  // fix here
+  if(fStop){
+    // blink animation here
+    STOPTimer.start();
+    fStop = false;
+    for(int i=0;i<5;i++){
+      fill_solid(StopSignalStrip, SS_LED_NUMBER, CHSV(STOP_HUE, STOP_SAT, brightens2[0]));
+      timeLoop(millis(),random(100,350));
+      fill_solid(StopSignalStrip, SS_LED_NUMBER, CHSV(STOP_HUE, STOP_SAT, brightens2[3]));
+      timeLoop(millis(),random(50,200));
+    }  
+  }else{
+    // static animation here
     fill_solid(StopSignalStrip, SS_LED_NUMBER, CHSV(STOP_HUE, STOP_SAT, brightens2[0]));
     FastLED[STOP_INDEX].showLeds();
   }
+  
 }
 void StopSignalAnimationOFF(){
   fill_solid(StopSignalStrip,SS_LED_NUMBER,CRGB::Black);
-    FastLED[STOP_INDEX].showLeds();
-    if(triggerOnce){
-      STOPTimer.start();
-      triggerOnce = false;
-    }
+  FastLED[STOP_INDEX].showLeds();
 }
 void RunSignalAnimationON(){
   if(onStartupRunning){
@@ -158,6 +144,10 @@ void RunSignalAnimationOFF(){
     FastLED[RUN_INDEX].showLeds(); 
 }
 
+#pragma endregion ANIMATIONS
+
+#pragma region ANIMATION CONTROL
+
 void readSignalStates() {
   TurnSignalState = digitalRead(TURNS_INPUT_PIN);
   StopSignalState = digitalRead(STOPS_INPUT_PIN);
@@ -173,13 +163,6 @@ void controlTurnSignalAnimation() {
 void controlStopSignalAnimation() {
   if (StopSignalState == HIGH) {
     StopSignalAnimationON();
-    // Check the timer condition here for animation control.
-    if (XTimePassed() && triggerOnce) {
-      // Make animation active again.
-      triggerOnce = false;
-    } else {
-      // Static light.
-    }
   } else if (StopSignalState == LOW) {
     StopSignalAnimationOFF();
   }
@@ -192,17 +175,10 @@ void controlRunSignalAnimation() {
   }
 }
 
-bool XTimePassed() {
-  // Implement the logic to check if X time has passed here.
-  // Return true if it has passed, otherwise false.
-  if (STOPTimer.ding()) {
-    fStop = true;
-    triggerOnce = true;
-  }
-  return true;
-}
-// FUNCTIONS
+#pragma endregion ANIMATION CONTROL
 
+
+#pragma region MAIN FUNCTIONS
 void setup() {
   pinMode(TURNS_INPUT_PIN,INPUT);
   pinMode(STOPS_INPUT_PIN,INPUT);
@@ -228,4 +204,9 @@ void loop() {
   controlTurnSignalAnimation();
   controlStopSignalAnimation();
   controlRunSignalAnimation();
+
+  if (STOPTimer.ding()) {
+    fStop = true;
+  }
 }
+#pragma endregion MAIN FUNCTIONS
